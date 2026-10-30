@@ -1,82 +1,95 @@
-let highestZ = 1;
+let highestZ = 100;
 
 class Paper {
-  holdingPaper = false;
-  mouseTouchX = 0;
-  mouseTouchY = 0;
-  mouseX = 0;
-  mouseY = 0;
-  prevMouseX = 0;
-  prevMouseY = 0;
-  velX = 0;
-  velY = 0;
-  rotation = Math.random() * 30 - 15;
-  currentPaperX = 0;
-  currentPaperY = 0;
-  rotating = false;
+    constructor(element) {
+        this.paper = element;
 
-  init(paper) {
-    document.addEventListener('mousemove', (e) => {
-      if(!this.rotating) {
-        this.mouseX = e.clientX;
-        this.mouseY = e.clientY;
-        
-        this.velX = this.mouseX - this.prevMouseX;
-        this.velY = this.mouseY - this.prevMouseY;
-      }
-        
-      const dirX = e.clientX - this.mouseTouchX;
-      const dirY = e.clientY - this.mouseTouchY;
-      const dirLength = Math.sqrt(dirX*dirX+dirY*dirY);
-      const dirNormalizedX = dirX / dirLength;
-      const dirNormalizedY = dirY / dirLength;
+        this.x = 0;
+        this.y = 0;
+        this.rotation = Math.random() * 30 - 15;
 
-      const angle = Math.atan2(dirNormalizedY, dirNormalizedX);
-      let degrees = 180 * angle / Math.PI;
-      degrees = (360 + Math.round(degrees)) % 360;
-      if(this.rotating) {
-        this.rotation = degrees;
-      }
+        this.dragging = false;
 
-      if(this.holdingPaper) {
-        if(!this.rotating) {
-          this.currentPaperX += this.velX;
-          this.currentPaperY += this.velY;
-        }
-        this.prevMouseX = this.mouseX;
-        this.prevMouseY = this.mouseY;
+        this.startX = 0;
+        this.startY = 0;
+        this.initialX = 0;
+        this.initialY = 0;
 
-        paper.style.transform = `translateX(${this.currentPaperX}px) translateY(${this.currentPaperY}px) rotateZ(${this.rotation}deg)`;
-      }
-    })
+        this.init();
+    }
 
-    paper.addEventListener('mousedown', (e) => {
-      if(this.holdingPaper) return; 
-      this.holdingPaper = true;
-      
-      paper.style.zIndex = highestZ;
-      highestZ += 1;
-      
-      if(e.button === 0) {
-        this.mouseTouchX = this.mouseX;
-        this.mouseTouchY = this.mouseY;
-        this.prevMouseX = this.mouseX;
-        this.prevMouseY = this.mouseY;
-      }
-      if(e.button === 2) {
-        this.rotating = true;
-      }
-    });
-    window.addEventListener('mouseup', () => {
-      this.holdingPaper = false;
-      this.rotating = false;
-    });
-  }
+    init() {
+        const paper = this.paper;
+
+        // Support dragging with mouse, touch, and stylus.
+        paper.style.touchAction = "none";
+        paper.style.userSelect = "none";
+        paper.style.cursor = "grab";
+
+        // Prevent the browser from dragging images separately.
+        paper.querySelectorAll("img").forEach((img) => {
+            img.draggable = false;
+        });
+
+        paper.addEventListener("pointerdown", (event) => {
+            // Only respond to the primary mouse button or touch.
+            if (!event.isPrimary) return;
+            if (event.pointerType === "mouse" && event.button !== 0) {
+                return;
+            }
+
+            // Stop another paper's handler from responding.
+            event.stopPropagation();
+
+            this.dragging = true;
+
+            this.startX = event.clientX;
+            this.startY = event.clientY;
+
+            this.initialX = this.x;
+            this.initialY = this.y;
+
+            // Bring the selected paper to the front.
+            paper.style.zIndex = ++highestZ;
+            paper.style.cursor = "grabbing";
+
+            // Continue tracking even outside the paper.
+            paper.setPointerCapture(event.pointerId);
+
+            event.preventDefault();
+        });
+
+        paper.addEventListener("pointermove", (event) => {
+            if (!this.dragging) return;
+
+            event.stopPropagation();
+
+            const deltaX = event.clientX - this.startX;
+            const deltaY = event.clientY - this.startY;
+
+            this.x = this.initialX + deltaX;
+            this.y = this.initialY + deltaY;
+
+            // Move ONLY the selected paper.
+            paper.style.transform =
+                `translate(${this.x}px, ${this.y}px) ` +
+                `rotateZ(${this.rotation}deg)`;
+        });
+
+        const stopDragging = () => {
+            if (!this.dragging) return;
+
+            this.dragging = false;
+            paper.style.cursor = "grab";
+        };
+
+        paper.addEventListener("pointerup", stopDragging);
+        paper.addEventListener("pointercancel", stopDragging);
+        paper.addEventListener("lostpointercapture", stopDragging);
+    }
 }
 
-const papers = Array.from(document.querySelectorAll('.paper'));
-
-papers.forEach(paper => {
-  const p = new Paper();
-  p.init(paper);
+// Give every paper its own independent drag controller.
+document.querySelectorAll(".paper").forEach((element) => {
+    new Paper(element);
 });
